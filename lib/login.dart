@@ -10,6 +10,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../screens/user_home.dart';
+import '../screens/worker_profile.dart';
 
 // ============================================================
 //  LoginPage Widget
@@ -422,41 +424,9 @@ class _LoginPageState extends State<LoginPage> {
 
 class UserHomeScreen extends StatelessWidget {
   const UserHomeScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('User Home'),
-        backgroundColor: const Color(0xFF4361EE),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
-              }
-            },
-          )
-        ],
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person, size: 60, color: Color(0xFF4361EE)),
-            SizedBox(height: 16),
-            Text('Welcome, User! 👋',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Browse available services here.',
-                style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
+    return const UserDashboardScreen();
   }
 }
 
@@ -482,17 +452,52 @@ class WorkerHomeScreen extends StatelessWidget {
           )
         ],
       ),
-      body: const Center(
+      body: Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.engineering, size: 60, color: Color(0xFF2EC4B6)),
-            SizedBox(height: 16),
-            Text('Welcome, Worker! 🔧',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('View and manage your jobs here.',
-                style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 40),
+            const Icon(Icons.engineering, size: 80, color: Color(0xFF2EC4B6)),
+            const SizedBox(height: 20),
+            const Text(
+              'Welcome to Your Dashboard!',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              height: 60,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WorkerProfileScreen()),
+                ),
+                icon: const Icon(Icons.edit),
+                label: const Text('Edit Profile', style: TextStyle(fontSize: 18)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2EC4B6),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 60,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('My Jobs coming soon!')),
+                  );
+                },
+                icon: const Icon(Icons.work),
+                label: const Text('My Jobs', style: TextStyle(fontSize: 18)),
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+              child: const Text('Logout'),
+            ),
           ],
         ),
       ),
@@ -500,11 +505,80 @@ class WorkerHomeScreen extends StatelessWidget {
   }
 }
 
-class AdminDashboard extends StatelessWidget {
+class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
 
   @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<void> _approveWorker(String uid, String name) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'verified': true,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$name approved ✅'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error approving worker'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _rejectWorker(String uid, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Worker'),
+        content: Text('Reject $name? This will delete their account.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reject', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _firestore.collection('users').doc(uid).delete();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$name rejected 🗑️'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error rejecting worker'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final query = _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'worker')
+        .where('verified', isEqualTo: false);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
@@ -519,23 +593,138 @@ class AdminDashboard extends StatelessWidget {
                 Navigator.pushReplacementNamed(context, '/login');
               }
             },
-          )
+          ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.admin_panel_settings,
-                size: 60, color: Color(0xFFE63946)),
-            SizedBox(height: 16),
-            Text('Admin Panel 🛡️',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Manage users and workers here.',
-                style: TextStyle(color: Colors.grey)),
-          ],
+      body: RefreshIndicator(
+        onRefresh: () => Future.value(),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: query.snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+
+            final workers = snapshot.data?.docs ?? [];
+
+            if (workers.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
+                    SizedBox(height: 16),
+                    Text('No Pending Workers 🎉', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Text('All workers approved or no new signups.', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: workers.length,
+              itemBuilder: (context, index) {
+                final worker = workers[index].data() as Map<String, dynamic>;
+                final uid = workers[index].id;
+                final name = worker['name'] ?? 'Unknown';
+                final email = worker['email'] ?? '';
+                final service = worker['service'] ?? 'N/A';
+                final experience = worker['experience']?.toString() ?? '0';
+                final createdAt = (worker['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: const Color(0xFF2EC4B6),
+                              child: const Icon(Icons.engineering, color: Colors.white),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  Text(email, style: TextStyle(color: Colors.grey[600])),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '${createdAt.day}/${createdAt.month}/${createdAt.year}',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(Icons.build, 'Service', service),
+                        _buildInfoRow(Icons.work, 'Experience', '${experience} years'),
+                        if (worker['pincode'] != null) _buildInfoRow(Icons.location_on, 'Pincode', worker['pincode']),
+                        if (worker['phone'] != null) _buildInfoRow(Icons.phone, 'Phone', worker['phone']),
+                        if (worker['address'] != null) _buildInfoRow(Icons.home, 'Address', worker['address']),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => _approveWorker(uid, name),
+                                icon: const Icon(Icons.check, size: 18),
+                                label: const Text('Approve'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => _rejectWorker(uid, name),
+                                icon: const Icon(Icons.close, size: 18),
+                                label: const Text('Reject'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Text('$label: ', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey[700])),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

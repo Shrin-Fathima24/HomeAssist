@@ -1,40 +1,9 @@
-# Fix Authentication Issues (Login/Signup)
+# Technician List & Ratings Enhancement TODO
 
-## Analysis
-- Signup: FirebaseAuth succeeds (blocks duplicates), Firestore write fails → no success msg, shows generic error
-- Login: Firestore read fails (doc missing + rules) → "unexpected error", no navigation
+1. [ ] Update lib/screens/user_home.dart: Enhance worker cards (name, rating⭐, exp, distance)
+2. [ ] Add ratings/feedback to Firestore (array of ratings in user doc)
+3. [ ] Worker profile: Show average rating
+4. [ ] Simple distance: Mock based on pincode/address match
+5. [ ] User rate worker after service (new screen?)
 
-## Steps:
-- [ ] Step 1: Set Firestore Rules in Firebase Console (see below)
-- [x] Step 2: Add debug logging to login.dart & signup_page.dart ✓
-- [ ] Step 3: `flutter pub get && flutter run` → check console prints for exact errors
-- [ ] Step 4: Verify Firebase Console: Authentication → Users created; Firestore → users collection docs?
-- [ ] Step 5: Test login → should navigate to role-based home
-- [ ] Step 6: Mark complete & run attempt_completion
-
-## Firestore Security Rules
-Go to https://console.firebase.google.com/project/home-317c3/firestore/rules → Replace with:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-  }
-}
-```
-→ **Publish** rules. This allows signed-in users to read/write their own user doc.
-
-## Testing Commands
-```
-cd securehome
-flutter clean
-flutter pub get
-flutter run
-```
-Look for `print` statements in VSCode debug console or terminal.
-
-**Expected**: After rules + logging, signup creates doc + shows success; login reads doc + navigates.
-
+**Proceeding with enhancements...**
