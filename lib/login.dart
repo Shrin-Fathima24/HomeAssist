@@ -95,10 +95,7 @@ class _LoginPageState extends State<LoginPage> {
 
     // ✅ USER
     if (role == 'user') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const UserHomeScreen()),
-      );
+      Navigator.pushReplacementNamed(context, '/user_home');
     }
 
     // ✅ WORKER
@@ -106,10 +103,7 @@ class _LoginPageState extends State<LoginPage> {
       final bool verified = data['verified'] ?? false;
 
       if (verified) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const WorkerHomeScreen()),
-        );
+        Navigator.pushReplacementNamed(context, '/worker_home');
       } else {
         setState(() => _errorMessage =
             '⏳ Your account is waiting for admin approval.');

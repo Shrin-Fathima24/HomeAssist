@@ -1,6 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'booking_page.dart';
+import 'chat_page.dart';
+
+class FeedbackDialog extends StatefulWidget {
+  final String workerId;
+
+  const FeedbackDialog({super.key, required this.workerId});
+
+  @override
+  State<FeedbackDialog> createState() => _FeedbackDialogState();
+}
+
+class _FeedbackDialogState extends State<FeedbackDialog> {
+  double _rating = 5.0;
+  final TextEditingController _commentController = TextEditingController();
+
+  Future<void> _submitFeedback() async {
+    if (mounted) Navigator.of(context).pop(); // Close dialog first
+    await FirebaseFirestore.instance.collection('users').doc(widget.workerId).update({
+      'ratings': FieldValue.arrayUnion([_rating]),
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Feedback submitted! Thank you! ⭐')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Leave Feedback'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Rating: ${_rating.toStringAsFixed(1)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Slider(
+            value: _rating,
+            min: 1.0,
+            max: 5.0,
+            divisions: 4,
+            onChanged: (value) => setState(() => _rating = value),
+          ),
+          TextField(
+            controller: _commentController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Optional comment...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _submitFeedback,
+          child: const Text('Submit'),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+}
 
 class TechnicianDetailScreen extends StatelessWidget {
   final String workerId;
@@ -30,7 +102,6 @@ class TechnicianDetailScreen extends StatelessWidget {
           final experience = worker['experience']?.toString() ?? '0';
           final pincode = worker['pincode'] ?? 'N/A';
           final address = worker['address'] ?? 'N/A';
-          final phone = worker['phone'] ?? 'N/A';
           final photoUrl = worker['photoUrl'] ?? '';
           final skills = List<String>.from(worker['skills'] ?? []);
           final charges = worker['charges']?.toString() ?? 'Negotiable';
@@ -190,8 +261,8 @@ class TechnicianDetailScreen extends StatelessWidget {
                                 final rating = ratings[index];
                                 return ListTile(
                                   leading: const Icon(Icons.star, color: Colors.amber),
-                                  title: Text('Great service! ⭐⭐⭐⭐⭐'),
-                                  subtitle: Text('User ${(index+1).toString()} • 2 days ago'),
+                                  title: Text('Rating: ${rating.toString()}'),
+                                  subtitle: Text('User ${(index + 1).toString()} • 2 days ago'),
                                 );
                               },
                             ),
@@ -207,8 +278,14 @@ class TechnicianDetailScreen extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('📅 Booking coming soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BookingPage(
+                                workerId: workerId,
+                                workerName: name,
+                              ),
+                            ),
                           );
                         },
                         icon: const Icon(Icons.calendar_today),
@@ -223,8 +300,14 @@ class TechnicianDetailScreen extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('💬 Chat initiated')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatPage(
+                                otherId: workerId,
+                                otherName: name,
+                              ),
+                            ),
                           );
                         },
                         icon: const Icon(Icons.chat),
@@ -237,6 +320,34 @@ class TechnicianDetailScreen extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+                // Feedback Section
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Leave a Review', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => FeedbackDialog(workerId: workerId),
+                            );
+                          },
+                          icon: const Icon(Icons.star_rate, color: Colors.amber),
+                          label: const Text('Rate this Technician'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

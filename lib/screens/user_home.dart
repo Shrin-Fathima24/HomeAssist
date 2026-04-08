@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../login.dart'; // For logout
 import '../screens/technician_detail.dart';
 
 class UserDashboardScreen extends StatefulWidget {
@@ -11,7 +10,8 @@ class UserDashboardScreen extends StatefulWidget {
   State<UserDashboardScreen> createState() => _UserHomeScreenState();
 }
 
-class _UserHomeScreenState extends State<UserDashboardScreen> {
+class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _pincodeController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
@@ -23,17 +23,31 @@ class _UserHomeScreenState extends State<UserDashboardScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _pincodeController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final query = _firestore
-        .collection('users')
-        .where('role', isEqualTo: 'worker')
-        .where('verified', isEqualTo: true)
-        .where('service', isNotEqualTo: null)
-        .snapshots();
+    // Check if user is authenticated
+    if (FirebaseAuth.instance.currentUser == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please login to access your dashboard')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Find Technician'),
+        title: const Text('HomeAssist'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -45,109 +59,271 @@ class _UserHomeScreenState extends State<UserDashboardScreen> {
             },
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Find Technician'),
+            Tab(text: 'My Bookings'),
+          ],
+        ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          // Search & Filters
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search technicians...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onChanged: (value) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _pincodeController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          hintText: 'Enter Pincode',
-                          prefixIcon: const Icon(Icons.location_on),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.filter_list),
-                            onPressed: () {
-                              setState(() {
-                                _pincodeFilter = _pincodeController.text;
-                              });
-                            },
-                          ),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 40,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: categories.length,
-                    itemBuilder: (context, index) {
-                      final cat = categories[index];
-                      final selected = _selectedCategory == cat;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(cat),
-                          selected: selected,
-                          onSelected: (sel) => setState(() => _selectedCategory = cat),
-                          selectedColor: Colors.purple.shade100,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Workers List
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: query,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                final workers = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final service = data['service']?.toString() ?? '';
-                  final pincode = data['pincode']?.toString() ?? '';
-                  final name = data['name']?.toString().toLowerCase() ?? '';
-                  final searchQuery = _searchController.text.toLowerCase();
-                  final matchesSearch = name.contains(searchQuery) || service.contains(searchQuery);
-                  final matchesCategory = _selectedCategory == 'All' || service.contains(_selectedCategory.replaceAll(RegExp(r' [⚡🚿🎨🔨🛠️]'), ''));
-                  final matchesPincode = _pincodeFilter.isEmpty || pincode.contains(_pincodeFilter);
-                  return matchesSearch && matchesCategory && matchesPincode;
-                }).toList();
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: workers.length,
-                  itemBuilder: (context, index) {
-                    final worker = workers[index].data() as Map<String, dynamic>;
-                    return WorkerCard(worker: worker, workerId: workers[index].id);
-                  },
-                );
-              },
-            ),
-          ),
+          _buildFindTechnicianTab(),
+          _buildMyBookingsTab(),
         ],
       ),
     );
   }
+
+  Widget _buildFindTechnicianTab() {
+    final query = _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'worker')
+        .where('verified', isEqualTo: true)
+        .snapshots();
+
+    return Column(
+      children: [
+        // Search & Filters
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search technicians...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: (value) => setState(() {}),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _pincodeController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: 'Enter Pincode',
+                        prefixIcon: const Icon(Icons.location_on),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.filter_list),
+                          onPressed: () {
+                            setState(() {
+                              _pincodeFilter = _pincodeController.text;
+                            });
+                          },
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 40,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length,
+                  itemBuilder: (context, index) {
+                    final cat = categories[index];
+                    final selected = _selectedCategory == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(cat),
+                        selected: selected,
+                        onSelected: (sel) => setState(() => _selectedCategory = cat),
+                        selectedColor: Colors.purple.shade100,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Workers List
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: query,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final workers = snapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final service = data['service']?.toString() ?? '';
+                final pincode = data['pincode']?.toString() ?? '';
+                final name = data['name']?.toString().toLowerCase() ?? '';
+                final verified = data['verified'] ?? false;
+                final searchQuery = _searchController.text.toLowerCase();
+                final hasService = service.isNotEmpty;
+                final isVerified = verified == true;
+                final matchesSearch = searchQuery.isEmpty || name.contains(searchQuery) || service.toLowerCase().contains(searchQuery);
+                final categoryName = _selectedCategory.split(' ')[0]; // Remove emoji
+                final matchesCategory = _selectedCategory == 'All' || service.toLowerCase().contains(categoryName.toLowerCase());
+                final matchesPincode = _pincodeFilter.isEmpty || pincode.contains(_pincodeFilter);
+                return hasService && isVerified && matchesSearch && matchesCategory && matchesPincode;
+              }).toList();
+              
+              if (workers.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search_off, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('No technicians found', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                      SizedBox(height: 8),
+                      Text('Try adjusting your filters or check back later', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: workers.length,
+                itemBuilder: (context, index) {
+                  final worker = workers[index].data() as Map<String, dynamic>;
+                  return WorkerCard(worker: worker, workerId: workers[index].id);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMyBookingsTab() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return const Center(child: Text('Please login to view bookings.'));
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('bookings')
+          .where('userId', isEqualTo: uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading bookings: ${snapshot.error}\nPlease check your connection and try again.'));
+        }
+        final bookings = snapshot.data?.docs ?? [];
+        if (bookings.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.calendar_today, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No bookings yet', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                SizedBox(height: 8),
+                Text('Book a service to get started!', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: bookings.length,
+          itemBuilder: (context, index) {
+            final booking = bookings[index].data() as Map<String, dynamic>;
+            final status = booking['status'] ?? 'pending';
+            final workerName = booking['workerName'] ?? 'Unknown';
+            final dateStr = booking['date'] ?? '';
+            final time = booking['time'] ?? '';
+            final problem = booking['problemDescription'] ?? '';
+
+            // Format date
+            String formattedDate = 'N/A';
+            if (dateStr.isNotEmpty) {
+              try {
+                final date = DateTime.parse(dateStr);
+                formattedDate = '${date.day}/${date.month}/${date.year}';
+              } catch (e) {
+                formattedDate = dateStr;
+              }
+            }
+
+            Color statusColor;
+            String statusText;
+            switch (status) {
+              case 'accepted':
+                statusColor = Colors.green;
+                statusText = 'Accepted';
+                break;
+              case 'rejected':
+                statusColor = Colors.red;
+                statusText = 'Rejected';
+                break;
+              case 'completed':
+                statusColor = Colors.blue;
+                statusText = 'Completed';
+                break;
+              default:
+                statusColor = Colors.orange;
+                statusText = 'Pending';
+            }
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(workerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Date: $formattedDate', style: const TextStyle(color: Colors.grey)),
+                    Text('Time: $time', style: const TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    Text('Problem: $problem'),
+                    if (status == 'accepted' || status == 'in_progress') ...[
+                      const SizedBox(height: 8),
+                      Text('Service OTP: ${booking['otp'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
+
 
 class WorkerCard extends StatelessWidget {
   final Map<String, dynamic> worker;
@@ -169,32 +345,70 @@ class WorkerCard extends StatelessWidget {
     final experience = worker['experience']?.toString() ?? '0';
     final pincode = worker['pincode'] ?? 'N/A';
     final address = worker['address'] ?? 'N/A';
+    final photoUrl = worker['photoUrl'] ?? '';
+    final charges = worker['charges']?.toString() ?? 'Negotiable';
+    final skills = worker['skills'] as List<dynamic>? ?? [];
     final ratings = worker['ratings'] as List<dynamic>? ?? [];
-    final avgRating = ratings.isNotEmpty ? ratings.map<double>((r) => (r as num).toDouble()).reduce((a, b) => a + b) / ratings.length : 4.5;
+    final avgRating = ratings.isNotEmpty ? ratings.map<double>((r) => (r as num).toDouble()).reduce((a, b) => a + b) / ratings.length : 0.0;
+    final verified = worker['verified'] ?? false;
 
     // Mock user pincode - replace with actual user profile
-    const userPincode = '560001'; 
+    const userPincode = '560001';
 
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.green,
-                  child: const Icon(Icons.engineering, color: Colors.white),
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                      backgroundColor: Colors.green.shade100,
+                      child: photoUrl.isEmpty ? const Icon(Icons.engineering, color: Colors.white) : null,
+                    ),
+                    if (verified)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.verified, color: Colors.white, size: 16),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          ),
+                          if (verified)
+                            const Icon(Icons.verified, color: Colors.green, size: 18),
+                        ],
+                      ),
                       Text(service, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                      if (worker['charges'] != null) Text('₹${worker['charges']}/hr', style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold)),
+                      Text('₹$charges/hr', style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                          Text(' ${avgRating.toStringAsFixed(1)} (${ratings.length})'),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -203,9 +417,7 @@ class WorkerCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.star, color: Colors.amber, size: 20),
-                const SizedBox(width: 4),
-                Text('${avgRating.toStringAsFixed(1)} (${ratings.length} reviews)'),
+                Text('Experience: $experience years', style: const TextStyle(fontSize: 12)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -213,42 +425,49 @@ class WorkerCard extends StatelessWidget {
                     color: Colors.blue.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(_calculateDistance(pincode, userPincode)),
+                  child: Text(_calculateDistance(pincode, userPincode), style: const TextStyle(fontSize: 12)),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text('Experience: $experience years'),
-            Text('Pincode: $pincode'),
-            Text('Address: $address', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-            if (worker['skills'] != null && (worker['skills'] as List).isNotEmpty)
+            const SizedBox(height: 4),
+            Text('📍 $pincode', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            if (address.isNotEmpty) Text('🏠 $address', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            if (skills.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Wrap(
                   spacing: 4,
-                  children: (worker['skills'] as List).take(3).map<Widget>((skill) => Chip(
-                    label: Text(skill.toString(), style: const TextStyle(fontSize: 12)),
+                  runSpacing: 4,
+                  children: skills.take(3).map<Widget>((skill) => Chip(
+                    label: Text(skill.toString(), style: const TextStyle(fontSize: 10)),
                     backgroundColor: Colors.green.shade100,
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   )).toList(),
                 ),
               ),
 
             const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TechnicianDetailScreen(workerId: workerId),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.info_outline),
-                    label: const Text('View Details'),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TechnicianDetailScreen(workerId: workerId),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.info_outline, size: 18),
+                label: const Text('View Details'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
+              ),
+            ),
           ],
         ),
       ),
