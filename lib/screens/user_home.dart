@@ -20,6 +20,7 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
   String _selectedCategory = 'All';
   String _pincodeFilter = '';
   int _bookingTabIndex = 0;
+  String _userPincode = '';
 
   final List<String> categories = [
     'All', 'Electrician ⚡', 'Plumber 🚿', 'Painter 🎨', 'Carpenter 🔨', 'Mechanic 🛠️'
@@ -29,6 +30,25 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          final data = doc.data()!;
+          setState(() {
+            _userPincode = data['pincode'] ?? '';
+          });
+        }
+      } catch (e) {
+        // Handle error silently or show a message
+        print('Error loading user profile: $e');
+      }
+    }
   }
 
   @override
@@ -52,6 +72,13 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
       appBar: AppBar(
         title: const Text('HomeAssist'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'My Profile',
+            onPressed: () {
+              Navigator.pushNamed(context, '/user_profile');
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.star),
             tooltip: 'My Ratings',
@@ -207,7 +234,11 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
                 itemCount: workers.length,
                 itemBuilder: (context, index) {
                   final worker = workers[index].data() as Map<String, dynamic>;
-                  return WorkerCard(worker: worker, workerId: workers[index].id);
+                  return WorkerCard(
+                    worker: worker,
+                    workerId: workers[index].id,
+                    userPincode: _userPincode,
+                  );
                 },
               );
             },
@@ -558,8 +589,14 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
 class WorkerCard extends StatelessWidget {
   final Map<String, dynamic> worker;
   final String workerId;
+  final String userPincode;
 
-  const WorkerCard({super.key, required this.worker, required this.workerId});
+  const WorkerCard({
+    super.key,
+    required this.worker,
+    required this.workerId,
+    required this.userPincode,
+  });
 
   String _calculateDistance(String workerPincode, String userPincode) {
     if (workerPincode.isEmpty || userPincode.isEmpty) return 'N/A';
@@ -581,9 +618,6 @@ class WorkerCard extends StatelessWidget {
     final ratings = worker['ratings'] as List<dynamic>? ?? [];
     final avgRating = ratings.isNotEmpty ? ratings.map<double>((r) => (r as num).toDouble()).reduce((a, b) => a + b) / ratings.length : 0.0;
     final verified = worker['verified'] ?? false;
-
-    // Mock user pincode - replace with actual user profile
-    const userPincode = '560001';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

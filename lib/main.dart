@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'login.dart';
+import 'login_fixed.dart' as login;
 import 'signup_page.dart';
 import 'splash_screen.dart';
 
 import 'screens/worker_profile.dart';
 import 'screens/earnings_page.dart';
+import 'screens/user_profile.dart';
+import 'screens/worker_signup_completion.dart';
+import 'screens/admin_workers.dart';
+import 'screens/user_home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,11 +51,14 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(),
       routes: {
-        '/login': (context) => const LoginPage(),
-        '/signup': (context) => const SignupPage(),
-        '/user_home': (context) => const UserHomeScreen(),
-        '/worker_home': (context) => const WorkerProfileScreen(),
-        '/earnings': (context) => const EarningsPage(),
+        '/login': (context) => const login.LoginPage(),
+        '/signup': (context) => SignupPage(),
+        '/worker_signup_completion': (context) => WorkerSignupCompletionPage(),
+        '/admin_workers': (context) => AdminWorkersScreen(),
+        '/user_home': (context) => const UserDashboardScreen(),
+        '/user_profile': (context) => UserProfileScreen(),
+        '/worker_home': (context) => WorkerProfileScreen(),
+        '/earnings': (context) => EarningsPage(),
       },
     );
   }

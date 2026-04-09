@@ -10,8 +10,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../screens/user_home.dart';
-import '../screens/worker_profile.dart';
+import 'screens/user_home.dart';
+import 'screens/worker_profile.dart';
+import 'screens/worker_signup_completion.dart';
+import 'screens/admin_workers.dart';
 
 // ============================================================
 //  LoginPage Widget
@@ -101,12 +103,17 @@ debugPrint('🔴 Login unexpected error: $e');
     // ✅ WORKER
     else if (role == 'worker') {
       final bool verified = data['verified'] ?? false;
+      final String status = data['status'] ?? 'pending';
 
-      if (verified) {
+      if (verified && status == 'approved') {
         Navigator.pushReplacementNamed(context, '/worker_home');
+      } else if (status == 'pending') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkerSignupCompletionPage()),
+        );
       } else {
-        setState(() => _errorMessage =
-            '⏳ Your account is waiting for admin approval.');
+        setState(() => _errorMessage = 'Account $status. Contact support.');
       }
     }
 
@@ -114,7 +121,7 @@ debugPrint('🔴 Login unexpected error: $e');
     else if (role == 'admin') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const AdminDashboard()),
+        MaterialPageRoute(builder: (_) => const AdminWorkersScreen()),
       );
     }
 

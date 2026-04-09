@@ -85,9 +85,11 @@ class _SignupPageState extends State<SignupPage> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signup successful! Please login')),
+        const SnackBar(content: Text('Signup successful!')),
       );
-      Navigator.pushReplacementNamed(context, '/login');
+      // Redirect workers to dashboard, users to login
+      final route = _selectedRole == 'worker' ? '/worker_home' : '/login';
+      Navigator.pushReplacementNamed(context, route);
     }
   } on FirebaseAuthException catch (e) {
     setState(() => _errorMessage = e.message ?? 'Signup failed');

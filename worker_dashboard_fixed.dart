@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'screens/worker_signup_completion.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   const WorkerProfileScreen({super.key});
@@ -26,6 +27,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
   bool _isLoading = false;
   bool _isEditMode = false;
+  bool _profileComplete = false;
+
+  final List<String> _availableSkills = [
+    'Electrician', 'Plumber', 'Carpenter', 'Painter', 'AC Technician',
+    'Mason', 'Welder', 'Tiler', 'Roofer', 'HVAC Technician',
+    'Locksmith', 'Pest Control', 'Cleaner', 'Gardener', 'Driver'
+  ];
 
   @override
   void initState() {
@@ -38,7 +46,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     final uid = _auth.currentUser!.uid;
     final doc = await _firestore.collection('users').doc(uid).get();
     if (doc.exists) {
-      final data = doc.data()!;
+    final data = doc.data()!;
       _nameController.text = data['name'] ?? '';
       _serviceController.text = data['service'] ?? '';
       _experienceController.text = data['experience']?.toString() ?? '';
@@ -49,6 +57,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       _skillsController.text = (data['skills'] as List? ?? []).join(', ');
       _chargesController.text = data['charges'] ?? '';
       _upiIdController.text = data['upiId'] ?? '';
+      _profileComplete = data['profileComplete'] ?? false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -201,15 +211,27 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _skillsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Skills (comma separated)',
-                        prefixIcon: Icon(Icons.build),
-                        border: OutlineInputBorder(),
-                        hintText: 'Wiring, Plumbing, Painting',
-                      ),
+                    const Text('Skills:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _availableSkills.map((skill) => FilterChip(
+                        label: Text(skill),
+                        selected: _skillsController.text.split(',').map((s) => s.trim()).contains(skill),
+                        onSelected: (sel) {
+                          final skills = _skillsController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                          if (sel) {
+                            skills.add(skill);
+                          } else {
+                            skills.remove(skill);
+                          }
+                          _skillsController.text = skills.join(', ');
+                          setState(() {});
+                        },
+                      )).toList(),
                     ),
+                    const SizedBox(height: 16),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _chargesController,
@@ -366,6 +388,44 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                         ),
                       ),
                     ),
+                    if (!_profileComplete) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.warning_amber, color: Colors.orange, size: 48),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Complete your profile signup to receive bookings!',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const WorkerSignupCompletionPage()),
+                                ),
+                                icon: const Icon(Icons.arrow_forward_ios),
+                                label: const Text('Complete Now', style: TextStyle(fontSize: 16)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
