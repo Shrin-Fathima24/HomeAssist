@@ -64,7 +64,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       }
 
       if (otpInput != storedOtp) {
-        print('OTP mismatch: input="$otpInput" (length: ${otpInput.length}), stored="$storedOtp" (length: ${storedOtp.length}, type: ${otp.runtimeType})');
+debugPrint('OTP mismatch: input="$otpInput" (length: ${otpInput.length}), stored="$storedOtp" (length: ${storedOtp.length}, type: ${otp.runtimeType})');
         setState(() => _errorText = 'Incorrect OTP. Please check with the customer and try again.');
         return;
       }

@@ -21,6 +21,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   final _phoneController = TextEditingController();
   final _photoUrlController = TextEditingController();
   final _skillsController = TextEditingController();
+  final _upiIdController = TextEditingController();
   final _chargesController = TextEditingController();
 
   bool _isLoading = false;
@@ -47,6 +48,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       _photoUrlController.text = data['photoUrl'] ?? '';
       _skillsController.text = (data['skills'] as List? ?? []).join(', ');
       _chargesController.text = data['charges'] ?? '';
+      _upiIdController.text = data['upiId'] ?? '';
     }
   }
 
@@ -64,6 +66,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         'photoUrl': _photoUrlController.text.trim(),
         'skills': _skillsController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
         'charges': _chargesController.text.trim(),
+        'upiId': _upiIdController.text.trim(),
         'updatedAt': Timestamp.now(),
       });
       if (mounted) {
@@ -218,6 +221,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                         hintText: '₹500',
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _upiIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'UPI ID',
+                        prefixIcon: Icon(Icons.account_balance),
+                        border: OutlineInputBorder(),
+                        hintText: 'yourname@paytm or phone@upi',
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -262,7 +275,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(data['name'] ?? 'Unknown', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                    Text(data['service'] ?? 'N/A', style: const TextStyle(fontSize: 18, color: Colors.grey[600])),
+                    Text(data['service'] ?? 'N/A', style: TextStyle(fontSize: 18, color: Colors.grey[600])),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -377,7 +390,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       ),
     );
   }
-}
 
   @override
   void dispose() {
@@ -390,6 +402,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     _photoUrlController.dispose();
     _skillsController.dispose();
     _chargesController.dispose();
+    _upiIdController.dispose();
     super.dispose();
   }
 }

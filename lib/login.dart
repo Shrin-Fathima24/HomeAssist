@@ -62,10 +62,10 @@ class _LoginPageState extends State<LoginPage> {
       // Step 2: Fetch user data from Firestore
       await _handleRoleNavigation(uid);
     } on FirebaseAuthException catch (e) {
-      print('🔴 Login Auth error: ${e.code} - ${e.message}');
+debugPrint('🔴 Login Auth error: ${e.code} - ${e.message}'); // TODO: add import 'package:flutter/foundation.dart'; if keeping kDebugMode
       setState(() => _errorMessage = _mapAuthError(e.code));
     } catch (e) {
-      print('🔴 Login unexpected error: $e');
+debugPrint('🔴 Login unexpected error: $e');
       setState(() =>
           _errorMessage = 'An unexpected error occurred. Please try again.');
     } finally {
@@ -124,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
           _errorMessage = 'Invalid role. Contact support.');
     }
   } catch (e) {
-    print("🔥 Firestore error: $e");
+debugPrint("🔥 Firestore error: $e");
     setState(() =>
         _errorMessage = 'Error fetching user data.');
   }

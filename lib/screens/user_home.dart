@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/technician_detail.dart';
+import 'ratings_page.dart';
+import 'payment_page.dart';
 
 class UserDashboardScreen extends StatefulWidget {
   const UserDashboardScreen({super.key});
@@ -17,6 +19,7 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'All';
   String _pincodeFilter = '';
+  int _bookingTabIndex = 0;
 
   final List<String> categories = [
     'All', 'Electrician ⚡', 'Plumber 🚿', 'Painter 🎨', 'Carpenter 🔨', 'Mechanic 🛠️'
@@ -49,6 +52,16 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
       appBar: AppBar(
         title: const Text('HomeAssist'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.star),
+            tooltip: 'My Ratings',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RatingsPage()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -211,18 +224,28 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
     }
 
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('bookings')
-          .where('userId', isEqualTo: uid)
-          .snapshots(),
+      stream: _firestore.collection('bookings').where('userId', isEqualTo: uid).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading bookings: ${snapshot.error}\nPlease check your connection and try again.'));
+          return Center(
+            child: Text('Error loading bookings: ${snapshot.error}\nPlease check your connection and try again.'),
+          );
         }
+
         final bookings = snapshot.data?.docs ?? [];
+        final currentBookings = bookings.where((doc) {
+          final status = (doc.data() as Map<String, dynamic>)['status']?.toString() ?? 'pending';
+          return status == 'pending' || status == 'accepted' || status == 'in_progress';
+        }).toList();
+        final pastBookings = bookings.where((doc) {
+          final status = (doc.data() as Map<String, dynamic>)['status']?.toString() ?? 'pending';
+          return status == 'completed' || status == 'paid' || status == 'rejected';
+        }).toList();
+        final selectedBookings = _bookingTabIndex == 0 ? currentBookings : pastBookings;
+
         if (bookings.isEmpty) {
           return const Center(
             child: Column(
@@ -237,94 +260,301 @@ class _UserHomeScreenState extends State<UserDashboardScreen> with SingleTickerP
             ),
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: bookings.length,
-          itemBuilder: (context, index) {
-            final booking = bookings[index].data() as Map<String, dynamic>;
-            final status = booking['status'] ?? 'pending';
-            final workerName = booking['workerName'] ?? 'Unknown';
-            final dateStr = booking['date'] ?? '';
-            final time = booking['time'] ?? '';
-            final problem = booking['problemDescription'] ?? '';
 
-            // Format date
-            String formattedDate = 'N/A';
-            if (dateStr.isNotEmpty) {
-              try {
-                final date = DateTime.parse(dateStr);
-                formattedDate = '${date.day}/${date.month}/${date.year}';
-              } catch (e) {
-                formattedDate = dateStr;
-              }
-            }
+        if (selectedBookings.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(_bookingTabIndex == 0 ? Icons.schedule : Icons.history, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  _bookingTabIndex == 0 ? 'No current bookings' : 'No past bookings',
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _bookingTabIndex == 0 ? 'Your upcoming bookings will appear here.' : 'Completed or rejected bookings will appear here.',
+                  style: const TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
 
-            Color statusColor;
-            String statusText;
-            switch (status) {
-              case 'accepted':
-                statusColor = Colors.green;
-                statusText = 'Accepted';
-                break;
-              case 'rejected':
-                statusColor = Colors.red;
-                statusText = 'Rejected';
-                break;
-              case 'completed':
-                statusColor = Colors.blue;
-                statusText = 'Completed';
-                break;
-              default:
-                statusColor = Colors.orange;
-                statusText = 'Pending';
-            }
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(workerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            statusText,
-                            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Text('Current bookings'),
+                      selected: _bookingTabIndex == 0,
+                      onSelected: (_) => setState(() => _bookingTabIndex = 0),
                     ),
-                    const SizedBox(height: 8),
-                    Text('Date: $formattedDate', style: const TextStyle(color: Colors.grey)),
-                    Text('Time: $time', style: const TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 8),
-                    Text('Problem: $problem'),
-                    if (status == 'accepted' || status == 'in_progress') ...[
-                      const SizedBox(height: 8),
-                      Text('Service OTP: ${booking['otp'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Text('Past bookings'),
+                      selected: _bookingTabIndex == 1,
+                      onSelected: (_) => setState(() => _bookingTabIndex = 1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: selectedBookings.length,
+                itemBuilder: (context, index) {
+                  final bookingDoc = selectedBookings[index];
+                  final booking = bookingDoc.data() as Map<String, dynamic>;
+                  final status = booking['status']?.toString() ?? 'pending';
+                  final workerName = booking['workerName']?.toString() ?? 'Unknown';
+                  final dateStr = booking['date']?.toString() ?? '';
+                  final time = booking['time']?.toString() ?? '';
+                  final problem = booking['problemDescription']?.toString() ?? '';
+
+                  String formattedDate = 'N/A';
+                  if (dateStr.isNotEmpty) {
+                    try {
+                      final date = DateTime.parse(dateStr);
+                      formattedDate = '${date.day}/${date.month}/${date.year}';
+                    } catch (_) {
+                      formattedDate = dateStr;
+                    }
+                  }
+
+                  Color statusColor;
+                  String statusText;
+                  switch (status) {
+                    case 'accepted':
+                      statusColor = Colors.green;
+                      statusText = 'Accepted';
+                      break;
+                    case 'in_progress':
+                      statusColor = Colors.blueAccent;
+                      statusText = 'In Progress';
+                      break;
+                    case 'rejected':
+                      statusColor = Colors.red;
+                      statusText = 'Rejected';
+                      break;
+                    case 'completed':
+                      statusColor = Colors.blue;
+                      statusText = 'Completed';
+                      break;
+                    case 'paid':
+                      statusColor = Colors.green;
+                      statusText = 'Paid';
+                      break;
+                    default:
+                      statusColor = Colors.orange;
+                      statusText = 'Pending';
+                  }
+
+                  final amount = booking['amount'];
+                  final paymentMethod = booking['paymentMethod']?.toString();
+                  final paymentStatus = booking['paymentStatus']?.toString() ?? 'pending';
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(workerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withAlpha((255 * 0.1).round()),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  statusText,
+                                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Date: $formattedDate', style: const TextStyle(color: Colors.grey)),
+                          Text('Time: $time', style: const TextStyle(color: Colors.grey)),
+                          const SizedBox(height: 8),
+                          Text('Problem: $problem'),
+                          if (status == 'accepted' || status == 'in_progress') ...[
+                            const SizedBox(height: 8),
+                            Text("Service OTP: ${booking['otp'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                          if (status == 'completed' && amount != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.orange.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Payment Details',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Total Amount: ₹${amount is num ? amount.toStringAsFixed(2) : amount.toString()}',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                  if (paymentMethod != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Payment Method: $paymentMethod',
+                                      style: const TextStyle(color: Colors.grey),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  if (paymentStatus == 'pending' && paymentMethod == 'Online') ...[
+                                    const Text(
+                                      'Please complete the UPI payment to finalize the service.',
+                                      style: TextStyle(color: Colors.red, fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => PaymentPage(
+                                                bookingId: bookingDoc.id,
+                                                workerId: booking['workerId'],
+                                                workerName: workerName,
+                                                amount: amount is num ? amount.toDouble() : 0.0,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.payment, size: 16),
+                                        label: const Text('Pay via UPI'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ] else if (paymentStatus == 'pending' && paymentMethod == 'Cash') ...[
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade100,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.orange.shade300),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Pay in cash when technician arrives',
+                                            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          ElevatedButton(
+                                            onPressed: () async {
+                                              final confirmed = await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) => AlertDialog(
+                                                  title: const Text('Mark Cash Payment Complete'),
+                                                  content: Text('Did you pay ₹${amount is num ? amount.toStringAsFixed(2) : amount.toString()} in cash to $workerName?'),
+                                                  actions: [
+                                                    TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('No')),
+                                                    ElevatedButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Yes')),
+                                                  ],
+                                                ),
+                                              );
+
+                                              if (confirmed == true && mounted) {
+                                                try {
+                                                  await _firestore.collection('bookings').doc(bookingDoc.id).update({
+                                                    'paymentStatus': 'completed',
+                                                    'paymentCompletedAt': FieldValue.serverTimestamp(),
+                                                    'actualPaymentMethod': 'Cash',
+                                                  });
+
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Payment marked complete! ✅')),
+                                                  );
+                                                } catch (e) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                                }
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                            child: const Text('Mark as Paid'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else if (paymentStatus == 'completed') ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade100,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.check_circle, color: Colors.green, size: 16),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Payment Completed',
+                                            style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                  },
                 ),
               ),
-            );
-          },
-        );
-      },
-    );
+            ],
+          );
+        },
+      );
   }
 }
-
-
 class WorkerCard extends StatelessWidget {
   final Map<String, dynamic> worker;
   final String workerId;

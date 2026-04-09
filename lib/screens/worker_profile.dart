@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'chat_page.dart';
 import 'otp_verification.dart';
+import 'ratings_page.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   const WorkerProfileScreen({super.key});
@@ -24,6 +26,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   final _photoUrlController = TextEditingController();
   final _skillsController = TextEditingController();
   final _chargesController = TextEditingController();
+  final _upiIdController = TextEditingController();
 
   bool _isLoading = false;
   bool _isEditMode = false;
@@ -53,6 +56,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       _photoUrlController.text = data['photoUrl'] ?? '';
       _skillsController.text = (data['skills'] as List? ?? []).join(', ');
       _chargesController.text = data['charges'] ?? '';
+      _upiIdController.text = data['upiId'] ?? '';
     }
   }
 
@@ -70,6 +74,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         'photoUrl': _photoUrlController.text.trim(),
         'skills': _skillsController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
         'charges': _chargesController.text.trim(),
+        'upiId': _upiIdController.text.trim(),
         'updatedAt': Timestamp.now(),
       });
       if (mounted) {
@@ -101,6 +106,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       appBar: AppBar(
         title: const Text('Worker Dashboard'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.star),
+            tooltip: 'My Ratings',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RatingsPage()),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(_isEditMode ? Icons.visibility : Icons.edit),
             onPressed: () {
@@ -247,21 +262,40 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      child: Column(
                         children: [
-                          Column(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              Text('₹$charges', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green)),
-                              const Text('per hour', style: TextStyle(color: Colors.grey)),
+                              Column(
+                                children: [
+                                  Text('₹$charges', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green)),
+                                  const Text('per hour', style: TextStyle(color: Colors.grey)),
+                                ],
+                              ),
+                              Column(
+                                children: [
+                                  Text('${ratings.length}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                  const Text('reviews', style: TextStyle(color: Colors.grey)),
+                                ],
+                              ),
                             ],
                           ),
-                          Column(
-                            children: [
-                              Text('${ratings.length}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.amber)),
-                              const Text('reviews', style: TextStyle(color: Colors.grey)),
-                            ],
-                          ),
+                          if ((data['upiId'] ?? '').toString().isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                const Icon(Icons.account_balance_wallet, color: Colors.purple),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'UPI: ${data['upiId']}',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -311,6 +345,25 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     ),
                   ),
                   if (_showBookings) _buildBookingsSection(),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/earnings');
+                      },
+                      icon: const Icon(Icons.account_balance_wallet, size: 24),
+                      label: const Text('My Earnings', style: TextStyle(fontSize: 18)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -428,6 +481,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 hintText: '₹500',
               ),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _upiIdController,
+              decoration: const InputDecoration(
+                labelText: 'UPI ID',
+                prefixIcon: Icon(Icons.account_balance_wallet),
+                border: OutlineInputBorder(),
+                hintText: 'yourname@upi',
+              ),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -541,6 +604,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 statusColor = Colors.purple;
                 statusText = 'Completed';
                 break;
+              case 'paid':
+                statusColor = Colors.green;
+                statusText = 'Paid';
+                break;
               default:
                 statusColor = Colors.orange;
                 statusText = 'Pending';
@@ -561,7 +628,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
+                            color: statusColor.withAlpha((255 * 0.1).round()),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -576,6 +643,57 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     Text('Time: $time', style: const TextStyle(color: Colors.grey)),
                     const SizedBox(height: 8),
                     Text('Problem: $problem'),
+                    if (status == 'completed' || status == 'paid') ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: status == 'paid' ? Colors.green.shade50 : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: status == 'paid' ? Colors.green.shade200 : Colors.orange.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              status == 'paid' ? 'Payment Received' : 'Payment Pending',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: status == 'paid' ? Colors.green : Colors.orange,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (booking['amount'] != null) ...[
+                              Text(
+                                'Amount: ₹${booking['amount'] is num ? booking['amount'].toStringAsFixed(2) : booking['amount'].toString()}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ],
+                            if (booking['paymentMethod'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Payment Method: ${booking['paymentMethod']}',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                            if (status == 'paid' && booking['actualPaymentMethod'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Actual Payment: ${booking['actualPaymentMethod']}',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                     if (status == 'pending') ...[
                       const SizedBox(height: 16),
                       Row(
@@ -649,6 +767,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
   Future<void> _updateBookingStatus(String bookingId, String status) async {
+    if (status == 'completed') {
+      // Show payment details dialog for completion
+      _showPaymentDialog(bookingId);
+      return;
+    }
+
     try {
       await _firestore.collection('bookings').doc(bookingId).update({
         'status': status,
@@ -666,5 +790,224 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showPaymentDialog(String bookingId) async {
+    final amountController = TextEditingController();
+    String selectedPaymentMethod = 'Cash';
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Job & Add Payment Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Amount (₹)',
+                prefixIcon: Icon(Icons.currency_rupee),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedPaymentMethod,
+              decoration: const InputDecoration(
+                labelText: 'Payment Method',
+                prefixIcon: Icon(Icons.payment),
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                DropdownMenuItem(value: 'Online', child: Text('Online (UPI)')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  selectedPaymentMethod = value;
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '• Cash: Payment will be marked complete when you select Cash\n'
+                '• Online (UPI): User will complete UPI payment in their app',
+                style: TextStyle(fontSize: 12, color: Colors.blue),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text.trim());
+              if (amount == null || amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid amount')),
+                );
+                return;
+              }
+              Navigator.of(context).pop(true);
+            },
+            child: const Text('Complete Job'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      final amount = double.parse(amountController.text.trim());
+      try {
+        // Determine payment status based on payment method
+        final paymentStatus = selectedPaymentMethod == 'Cash' ? 'completed' : 'pending';
+        
+        await _firestore.collection('bookings').doc(bookingId).update({
+          'status': 'completed',
+          'amount': amount,
+          'paymentMethod': selectedPaymentMethod,
+          'paymentStatus': paymentStatus,
+          'completedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (selectedPaymentMethod == 'Online') {
+          // Show UPI payment details
+          _showUpiPaymentDetails(amount, bookingId);
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Job completed! Payment marked as received. 💰')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error completing job: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showUpiPaymentDetails(double amount, String bookingId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    // Get worker's UPI ID
+    final workerDoc = await _firestore.collection('users').doc(user.uid).get();
+    final upiId = workerDoc.data()?['upiId'] ?? '';
+    final workerName = workerDoc.data()?['name'] ?? 'Worker';
+
+    if (upiId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add your UPI ID in your profile first.')),
+        );
+      }
+      return;
+    }
+
+    // Create UPI URL for QR code
+    final upiUrl = 'upi://pay?pa=$upiId&pn=$workerName&am=${amount.toStringAsFixed(2)}&cu=INR&tn=Payment for service';
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Collect Payment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Amount: ₹${amount.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Text('Scan QR code or use UPI ID to pay:'),
+              const SizedBox(height: 8),
+              Text(
+                upiId,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: QrImageView(
+                  data: upiUrl,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Ask the customer to scan this QR code or enter the UPI ID in their payment app.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Mark payment as completed
+                await _firestore.collection('bookings').doc(bookingId).update({
+                  'paymentStatus': 'completed',
+                  'paymentCompletedAt': FieldValue.serverTimestamp(),
+                  'actualPaymentMethod': 'UPI',
+                  'status': 'paid',
+                });
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Payment marked as received! ✅')),
+                  );
+                }
+              },
+              child: const Text('Payment Received'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _serviceController.dispose();
+    _experienceController.dispose();
+    _pincodeController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _photoUrlController.dispose();
+    _skillsController.dispose();
+    _chargesController.dispose();
+    _upiIdController.dispose();
+    super.dispose();
   }
 }

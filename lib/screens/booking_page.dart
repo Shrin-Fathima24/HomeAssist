@@ -17,6 +17,7 @@ class BookingPage extends StatefulWidget {
 class _BookingPageState extends State<BookingPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _problemController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isBooking = false;
@@ -78,7 +79,7 @@ class _BookingPageState extends State<BookingPage> {
     final userName = userDoc.exists ? (userDoc.data()?['name'] ?? 'Unknown User') : 'Unknown User';
     
     final otp = _generateOtp();
-    print('Generated OTP: "$otp" (length: ${otp.length})');
+
     final bookingData = {
       'userId': userId,
       'userName': userName,
@@ -87,6 +88,8 @@ class _BookingPageState extends State<BookingPage> {
       'date': _selectedDate!.toIso8601String(),
       'time': '${_selectedTime!.hour}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
       'problemDescription': _problemController.text.trim(),
+      'amount': double.tryParse(_amountController.text.trim()) ?? 0.0,
+      'paymentStatus': 'pending',
       'status': 'pending', // pending, accepted, in_progress, completed
       'otp': otp,
       'otpVerified': false,
@@ -115,6 +118,7 @@ class _BookingPageState extends State<BookingPage> {
   @override
   void dispose() {
     _problemController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -170,6 +174,28 @@ class _BookingPageState extends State<BookingPage> {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please describe the problem';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text('Estimated Amount', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  hintText: 'Enter amount in ₹',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter the expected amount';
+                  }
+                  final parsed = double.tryParse(value.trim());
+                  if (parsed == null || parsed <= 0) {
+                    return 'Please enter a valid amount';
                   }
                   return null;
                 },

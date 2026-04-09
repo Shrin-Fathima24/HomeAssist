@@ -18,14 +18,47 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
   final TextEditingController _commentController = TextEditingController();
 
   Future<void> _submitFeedback() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     if (mounted) Navigator.of(context).pop(); // Close dialog first
-    await FirebaseFirestore.instance.collection('users').doc(widget.workerId).update({
-      'ratings': FieldValue.arrayUnion([_rating]),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Feedback submitted! Thank you! ⭐')),
-      );
+
+    try {
+      // Fetch reviewer profile name if available
+      final reviewerDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final reviewerName = reviewerDoc.data()?['name'] as String? ?? user.displayName ?? 'Customer';
+
+      // Save detailed feedback to feedback collection
+      await FirebaseFirestore.instance.collection('feedback').add({
+        'userId': user.uid,
+        'workerId': widget.workerId,
+        'rating': _rating,
+        'reviewerName': reviewerName,
+        'comment': _commentController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Also update the worker's ratings array for backward compatibility.
+      // If this update is not permitted by security rules, keep the feedback save.
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(widget.workerId).update({
+          'ratings': FieldValue.arrayUnion([_rating]),
+        });
+      } catch (e) {
+        debugPrint('Warning: could not update worker ratings array: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Feedback submitted! Thank you! ⭐')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting feedback: $e')),
+        );
+      }
     }
   }
 
@@ -105,6 +138,7 @@ class TechnicianDetailScreen extends StatelessWidget {
           final photoUrl = worker['photoUrl'] ?? '';
           final skills = List<String>.from(worker['skills'] ?? []);
           final charges = worker['charges']?.toString() ?? 'Negotiable';
+          final upiId = worker['upiId']?.toString() ?? '';
           final ratings = List<dynamic>.from(worker['ratings'] ?? []);
           final avgRating = ratings.isNotEmpty 
               ? ratings.map<double>((r) => (r as num).toDouble()).reduce((a, b) => a + b) / ratings.length 
@@ -216,17 +250,37 @@ class TechnicianDetailScreen extends StatelessWidget {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Charges', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text(charges, style: const TextStyle(fontSize: 16, color: Colors.green)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Charges', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                Text(charges, style: const TextStyle(fontSize: 16, color: Colors.green)),
+                              ],
+                            ),
+                            const Icon(Icons.attach_money, color: Colors.green, size: 30),
                           ],
                         ),
-                        const Icon(Icons.attach_money, color: Colors.green, size: 30),
+                        if (upiId.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              const Icon(Icons.account_balance_wallet, color: Colors.purple),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'UPI: $upiId',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -243,7 +297,7 @@ class TechnicianDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Reviews (mock)
+                // Reviews from feedback collection
                 Card(
                   child: ExpansionTile(
                     leading: const Icon(Icons.reviews, color: Colors.orange),
@@ -251,21 +305,52 @@ class TechnicianDetailScreen extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: ratings.isEmpty 
-                          ? const Text('No reviews yet. Be the first!')
-                          : ListView.builder(
+                        child: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('feedback')
+                              .where('workerId', isEqualTo: workerId)
+                              .orderBy('createdAt', descending: true)
+                              .snapshots(),
+                          builder: (context, feedbackSnapshot) {
+                            if (feedbackSnapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (feedbackSnapshot.hasError) {
+                              return const Text('Could not load reviews');
+                            }
+                            final feedbackDocs = feedbackSnapshot.data?.docs ?? [];
+                            if (feedbackDocs.isEmpty) {
+                              return const Text('No reviews yet. Be the first!');
+                            }
+                            return ListView.separated(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
-                              itemCount: ratings.length > 3 ? 3 : ratings.length,
+                              itemCount: feedbackDocs.length > 3 ? 3 : feedbackDocs.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
                               itemBuilder: (context, index) {
-                                final rating = ratings[index];
+                                final data = feedbackDocs[index].data() as Map<String, dynamic>;
+                                final rating = (data['rating'] as num?)?.toDouble() ?? 0.0;
+                                final comment = data['comment'] as String? ?? '';
+                                final reviewerName = data['reviewerName'] as String? ?? 'Customer';
+                                final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
                                 return ListTile(
                                   leading: const Icon(Icons.star, color: Colors.amber),
-                                  title: Text('Rating: ${rating.toString()}'),
-                                  subtitle: Text('User ${(index + 1).toString()} • 2 days ago'),
+                                  title: Text('Rating: ${rating.toStringAsFixed(1)}'),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (comment.isNotEmpty) Text(comment),
+                                      Text(
+                                        'By $reviewerName • ${_formatDate(createdAt)}',
+                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
                                 );
                               },
-                            ),
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -356,4 +441,9 @@ class TechnicianDetailScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDate(DateTime? date) {
+  if (date == null) return '';
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }

@@ -102,20 +102,7 @@ class _SignupPageState extends State<SignupPage> {
   // ============================================================
   //  Map Firebase error codes → friendly messages
   // ============================================================
-  String _mapFirebaseError(String code) {
-    switch (code) {
-      case 'email-already-in-use':
-        return 'This email is already registered. Please login.';
-      case 'invalid-email':
-        return 'The email address is not valid.';
-      case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters.';
-      case 'network-request-failed':
-        return 'No internet connection. Please try again.';
-      default:
-        return 'Signup failed: $code';
-    }
-  }
+
 
   // ============================================================
   //  Dispose controllers to avoid memory leaks
@@ -390,25 +377,42 @@ class _SignupPageState extends State<SignupPage> {
     required String subtitle,
     required IconData icon,
   }) {
-    final bool selected = _selectedRole == value;
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor:
-            selected ? const Color(0xFF4361EE) : Colors.grey.shade100,
-        child: Icon(icon,
-            color: selected ? Colors.white : Colors.grey, size: 20),
+    return RadioListTile<String>(
+      value: value,
+      groupValue: _selectedRole,
+      onChanged: (String? newValue) {
+        if (newValue != null) {
+          setState(() => _selectedRole = newValue);
+        }
+      },
+      title: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: _selectedRole == value 
+                ? const Color(0xFF4361EE) 
+                : Colors.grey.shade100,
+            child: Icon(
+              icon,
+              color: _selectedRole == value ? Colors.white : Colors.grey, 
+              size: 18
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label, 
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)
+            ),
+          ),
+        ],
       ),
-      title:
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      trailing: Radio<String>(
-        value: value,
-        groupValue: _selectedRole,
-        onChanged: (v) => setState(() => _selectedRole = v!),
-        activeColor: const Color(0xFF4361EE),
+
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 12, color: Colors.grey)
       ),
-      onTap: () => setState(() => _selectedRole = value),
+      controlAffinity: ListTileControlAffinity.trailing,
+      dense: true,
     );
   }
 

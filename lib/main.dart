@@ -4,8 +4,9 @@ import 'firebase_options.dart';
 import 'login.dart';
 import 'signup_page.dart';
 import 'splash_screen.dart';
-import 'screens/user_home.dart';
+
 import 'screens/worker_profile.dart';
+import 'screens/earnings_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,7 @@ class MyApp extends StatelessWidget {
         '/signup': (context) => const SignupPage(),
         '/user_home': (context) => const UserHomeScreen(),
         '/worker_home': (context) => const WorkerProfileScreen(),
+        '/earnings': (context) => const EarningsPage(),
       },
     );
   }

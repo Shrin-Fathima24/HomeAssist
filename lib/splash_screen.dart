@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'login.dart';
-import 'main.dart'; // For MyApp if needed
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -75,7 +75,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF9370DB).withOpacity(0.4),
+color: const Color(0xFF9370DB).withAlpha((0xFF * 0.4).round()),
                             blurRadius: 30,
                             spreadRadius: 5,
                           ),
